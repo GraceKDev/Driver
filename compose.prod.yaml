@@ -1,0 +1,76 @@
+name: chaosdrive-prod
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chaosdrive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chaosdrive}
+      POSTGRES_DB: ${POSTGRES_DB:-chaosdrive}
+    volumes:
+      - chaosdrive_prod_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    command:
+      - --connection
+      - Host=db;Port=5432;Database=${POSTGRES_DB:-chaosdrive};Username=${POSTGRES_USER:-chaosdrive};Password=${POSTGRES_PASSWORD:-chaosdrive}
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-chaosdrive};Username=${POSTGRES_USER:-chaosdrive};Password=${POSTGRES_PASSWORD:-chaosdrive}
+      App__Origin: ${APP_ORIGIN:-http://localhost:3000}
+      Cookie__Secure: ${COOKIE_SECURE:-false}
+      AWS__Region: ${AWS_REGION:-ap-southeast-1}
+      AWS__BucketName: ${AWS_BUCKET_NAME:-chaosdrive-files-544885083248-ap-southeast-1}
+      DataProtection__KeysPath: /keys
+    volumes:
+      - chaosdrive_prod_dpkeys:/keys
+      - ${HOME}/.aws:/home/app/.aws:ro
+    expose:
+      - "8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: prod
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  chaosdrive_prod_pgdata:
+  chaosdrive_prod_dpkeys:

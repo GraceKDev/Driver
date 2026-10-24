@@ -1,0 +1,25 @@
+{
+  "name": "chaosdrive",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker compose up --build",
+    "dev:down": "docker compose down",
+    "dev:logs": "docker compose logs -f",
+    "dev:web": "npm run dev --workspace @chaosdrive/web",
+    "dev:api": "dotnet watch --project apps/api/ChaosDrive.Api/ChaosDrive.Api.csproj",
+    "build": "npm run build --workspace @chaosdrive/web && dotnet build apps/api/ChaosDrive.slnx",
+    "lint": "npm run lint --workspace @chaosdrive/web",
+    "db:migrate": "dotnet ef database update --project apps/api/ChaosDrive.Api/ChaosDrive.Api.csproj --startup-project apps/api/ChaosDrive.Api/ChaosDrive.Api.csproj",
+    "db:add": "dotnet ef migrations add --project apps/api/ChaosDrive.Api/ChaosDrive.Api.csproj --startup-project apps/api/ChaosDrive.Api/ChaosDrive.Api.csproj --output-dir Data/Migrations",
+    "api:types": "openapi-typescript http://localhost:8080/openapi/v1.json -o packages/api-client/src/schema.d.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "openapi-typescript": "^7.9.1"
+  }
+}

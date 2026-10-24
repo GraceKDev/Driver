@@ -1,0 +1,97 @@
+name: chaosdrive
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: chaosdrive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chaosdrive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chaosdrive}
+      POSTGRES_DB: ${POSTGRES_DB:-chaosdrive}
+    ports:
+      - "5432:5432"
+    volumes:
+      - chaosdrive_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    command:
+      - --connection
+      - Host=db;Port=5432;Database=${POSTGRES_DB:-chaosdrive};Username=${POSTGRES_USER:-chaosdrive};Password=${POSTGRES_PASSWORD:-chaosdrive}
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    env_file:
+      - .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-chaosdrive};Username=${POSTGRES_USER:-chaosdrive};Password=${POSTGRES_PASSWORD:-chaosdrive}
+      App__Origin: http://localhost:3000
+      Cookie__Secure: "false"
+      AWS__Region: ${AWS_REGION:-ap-southeast-1}
+      AWS__BucketName: ${AWS_BUCKET_NAME:-chaosdrive-files-544885083248-ap-southeast-1}
+      DataProtection__KeysPath: /keys
+    volumes:
+      - ./apps/api:/src/apps/api
+      - chaosdrive_nuget:/root/.nuget/packages
+      - chaosdrive_api_obj:/src/apps/api/ChaosDrive.Api/obj
+      - chaosdrive_api_bin:/src/apps/api/ChaosDrive.Api/bin
+      - chaosdrive_dpkeys:/keys
+      - ${HOME}/.aws:/root/.aws:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    environment:
+      API_URL: http://api:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app/apps/web
+    depends_on:
+      - api
+
+  adminer:
+    image: adminer:latest
+    profiles: ["tools"]
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  chaosdrive_pgdata:
+  chaosdrive_nuget:
+  chaosdrive_api_obj:
+  chaosdrive_api_bin:
+  chaosdrive_dpkeys:

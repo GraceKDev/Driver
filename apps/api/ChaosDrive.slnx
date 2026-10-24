@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ChaosDrive.Api/ChaosDrive.Api.csproj" />
+  <Project Path="ChaosDrive.Api.Tests/ChaosDrive.Api.Tests.csproj" />
+</Solution>
